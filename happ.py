@@ -1,9 +1,56 @@
 import streamlit as st
 import joblib
 import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import os
+import io
+import ssl
+import urllib.request
 
-model = joblib.load(r'C:\Users\gnana\heart_disease_model.pkl')
+# Train and save model if not already saved
+@st.cache_resource
+def load_model():
+    if os.path.exists('heart_disease_model.pkl'):
+        return joblib.load('heart_disease_model.pkl')
 
+    # Download and train if model not found
+    column_names = [
+        'age', 'sex', 'cp', 'trestbps', 'chol',
+        'fbs', 'restecg', 'thalach', 'exang',
+        'oldpeak', 'slope', 'ca', 'thal', 'target'
+    ]
+
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    url = "https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data"
+
+    with urllib.request.urlopen(url, context=ssl_context) as response:
+        data = response.read().decode('utf-8')
+
+    df = pd.read_csv(io.StringIO(data), names=column_names)
+    df.replace('?', float('nan'), inplace=True)
+    df.dropna(inplace=True)
+    df['target'] = df['target'].apply(lambda x: 1 if int(x) > 0 else 0)
+    df['ca']   = df['ca'].astype(float)
+    df['thal'] = df['thal'].astype(float)
+
+    X = df.drop('target', axis=1)
+    y = df['target']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    joblib.dump(model, 'heart_disease_model.pkl')
+    return model
+
+model = load_model()
 st.set_page_config(
     page_title="Heart Disease Risk Screener",
     page_icon="❤️",
@@ -37,10 +84,6 @@ h1, h2, h3 {
     font-size: 13px;
 }
 
-div[data-testid="stRadio"] > div {
-    gap: 10px;
-}
-
 div.stButton > button {
     width: 100%;
     background-color: #e05555;
@@ -59,14 +102,6 @@ div.stButton > button:hover {
     background-color: #c94444;
 }
 
-.card {
-    background: #13131f;
-    border: 0.5px solid rgba(255,255,255,0.08);
-    border-radius: 14px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-}
-
 .section-label {
     font-size: 11px;
     font-weight: 500;
@@ -75,21 +110,6 @@ div.stButton > button:hover {
     color: #e05555;
     margin-bottom: 0.8rem;
     margin-top: 1.2rem;
-}
-
-.hero-title {
-    text-align: center;
-    font-size: 26px;
-    font-weight: 500;
-    color: #f0f0f8;
-    margin-bottom: 0.4rem;
-}
-
-.hero-sub {
-    text-align: center;
-    font-size: 14px;
-    color: #8888aa;
-    margin-bottom: 1.5rem;
 }
 
 .divider {
@@ -172,8 +192,8 @@ draw();
 st.markdown("""
 <div style="text-align:center; padding: 2rem 0 1rem;">
     <div style="font-size:64px; animation: pulse 1.1s ease-in-out infinite; display:inline-block;">❤️</div>
-    <div class="hero-title">Heart Disease Risk Screener</div>
-    <div class="hero-sub">Answer 8 simple lifestyle questions — no lab tests needed.</div>
+    <div style="font-size:26px; font-weight:500; color:#f0f0f8; margin-bottom:0.4rem;">Heart Disease Risk Screener</div>
+    <div style="font-size:14px; color:#8888aa;">Answer 8 simple lifestyle questions — no lab tests needed.</div>
 </div>
 <style>
 @keyframes pulse {
@@ -194,14 +214,14 @@ age    = st.slider("Age", 18, 90, 30)
 gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
 
 st.markdown('<div class="section-label">Health Status</div>', unsafe_allow_html=True)
-bp      = st.radio("Do you have high blood pressure?",    ["Yes", "No"], horizontal=True)
-diabetic= st.radio("Are you diabetic?",                   ["Yes", "No"], horizontal=True, index=1)
-family  = st.radio("Family history of heart disease?",    ["Yes", "No"], horizontal=True, index=1)
+bp       = st.radio("Do you have high blood pressure?",  ["Yes", "No"], horizontal=True)
+diabetic = st.radio("Are you diabetic?",                 ["Yes", "No"], horizontal=True, index=1)
+family   = st.radio("Family history of heart disease?",  ["Yes", "No"], horizontal=True, index=1)
 
 st.markdown('<div class="section-label">Lifestyle</div>', unsafe_allow_html=True)
-smoker   = st.radio("Do you smoke?",                          ["Yes", "No"], horizontal=True, index=1)
-exercise = st.radio("Do you exercise regularly?",             ["Yes", "No"], horizontal=True)
-chest    = st.radio("Chest pain during physical activity?",   ["Yes", "No"], horizontal=True, index=1)
+smoker   = st.radio("Do you smoke?",                        ["Yes", "No"], horizontal=True, index=1)
+exercise = st.radio("Do you exercise regularly?",           ["Yes", "No"], horizontal=True)
+chest    = st.radio("Chest pain during physical activity?", ["Yes", "No"], horizontal=True, index=1)
 
 # Predict button
 if st.button("❤️ Check My Heart Risk"):
